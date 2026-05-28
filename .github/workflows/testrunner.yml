@@ -1,12 +1,7 @@
 name: iOS Remote Debugging Host
 
 on:
-  workflow_dispatch:
-    inputs:
-      region:
-        description: 'Tunnel region (ex: us, eu, ap, sa)'
-        required: true
-        default: 'sa'
+  workflow_dispatch: 
 
 jobs:
   configure-host:
