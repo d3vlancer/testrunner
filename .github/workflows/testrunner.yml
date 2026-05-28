@@ -36,23 +36,19 @@ jobs:
    
     - name: Start Reverse SSH Tunnel (Pinggy)
       run: |
-        # Conecta usando o host correto do plano gratuito (free.pinggy.io)
-        # O prefixo qr+tcp@ força o Pinggy a abrir um túnel TCP bruto para nós.
-        # Mapeamos a porta local 22 (SSH do Mac) usando -R 0:localhost:22
-        ssh -T -n -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes -R 0:localhost:22 qr+tcp@free.pinggy.io > pinggy.log &
+        # Adicionado o '-p 443' para o cliente SSH do Mac conectar na porta correta do Pinggy
+        ssh -T -n -p 443 -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes -R 0:localhost:22 qr+tcp@free.pinggy.io > pinggy.log &
         
-        # Aguarda o handshake da conexão SSH com o servidor do túnel
+        # Aguarda 10 segundos para o handshake e a geração dos links
         sleep 10
         
-        # Exibe o log gerado para capturarmos as informações de conexão
+        # Exibe o arquivo de log no console do GitHub Actions
         cat pinggy.log
         
-        # O Pinggy Free retorna no log uma linha como: "ssh -p 12345 user@free.pinggy.io"
-        PINGGY_CONN=$(grep -oE 'ssh -p [0-9]+ [a-zA-Z0-9\+\受]+@free\.pinggy\.io' pinggy.log || grep -oE 'free\.pinggy\.io:[0-9]+' pinggy.log | head -n 1)
-        
         echo "=========================================================="
-        echo "LOG DE CONEXÃO ANALISADO COM SUCESSO."
-        echo "Olhe as linhas acima do comando 'cat pinggy.log' para copiar o IP/Porta."
+        echo "LOG DE CONEXÃO EXIBIDO ACIMA."
+        echo "Abra o log desse step, procure pela linha 'Your tunnel is live at' "
+        echo "e copie o endereço 'free.pinggy.io:PORTA' para usar no Visual Studio."
         echo "=========================================================="
  
     - name: Keep Alive & Listen for Connection
