@@ -27,33 +27,36 @@ jobs:
       run: |
         # Ativa o Login Remoto (SSH) no macOS
         sudo systemsetup -setremotelogin on
-        
-        # Altera a senha do usuário 'runner' usando o comando nativo do macOS (sysadminctl)
+         
         sudo sysadminctl -password "$RUNNER_PWD" -user runner
-        
-        # Garante que o SSH aceita autenticação por senha
+         
         sudo sed -i '' 's/#PasswordAuthentication yes/PasswordAuthentication yes/g' /etc/ssh/sshd_config
-        
-        # Reinicia o serviço de SSH no macOS para aplicar as alterações
+         
         sudo launchctl kickstart -k system/com.openssh.sshd
- 
+  
     - name: Setup Ngrok
       env:
         NGROK_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
       run: |
         brew install ngrok/ngrok/ngrok
-        
-        # Consome o token blindado contra injeção de caracteres
         ngrok config add-authtoken "$NGROK_TOKEN"
 
     - name: Start Ngrok Tunnel (SSH Port 22)
       run: |
-        # Inicia o ngrok em background roteando a porta TCP 22 (SSH)
+        # Inicia o ngrok redirecionando a porta TCP 22
         ngrok tcp 22 --region ${{ github.event.inputs.ngrok_region }} --log=stdout > ngrok.log &
         sleep 5
-        
-        # Extrai a URL gerada pelo Ngrok (ex: tcp://0.tcp.ngrok.io:12345)
+         
         NGROK_URL=$(curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url')
+        
+        # SE A URL ESTIVER VAZIA, SIGNIFICA QUE O NGROK FALHOU (Ex: Falta de cartão)
+        if [ "$NGROK_URL" = "null" ] || [ -z "$NGROK_URL" ]; then
+          echo "❌ ERRO: O túnel do Ngrok não pôde ser iniciado."
+          echo "Verifique os logs abaixo para entender o motivo:"
+          cat ngrok.log
+          exit 1
+        fi
+        
         echo "=========================================================="
         echo "CONEXÃO SSH DISPONÍVEL:"
         echo "Endereço: $NGROK_URL"
@@ -61,17 +64,15 @@ jobs:
         echo "Senha: [Definida no seu Secret MACOS_RUNNER_PASSWORD]"
         echo "=========================================================="
         
-        # Salva a URL num arquivo de log legível no console do workflow
         echo "NGROK_URL=$NGROK_URL" >> $GITHUB_ENV
  
     - name: Keep Alive & Listen for Connection
       run: |
         echo "O Runner está pronto e aguardando conexões do Visual Studio."
-        echo "Para encerrar este runner, cancele o Job no GitHub Actions ou remova o arquivo /tmp/keepalive via SSH."
-        
         touch /tmp/keepalive
-        
-        # Loop que roda até o arquivo ser deletado ou o limite de 6h do GitHub ser atingido
+        while [ -f /tmp/keepalive ]; do
+          sleep 30
+        done
         while [ -f /tmp/keepalive ]; do
           sleep 30
         done
