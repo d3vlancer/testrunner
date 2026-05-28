@@ -40,7 +40,24 @@ jobs:
       run: | 
         brew install --cask localxpose
          
-        echo "$LX_TOKEN" | script -q /dev/null /opt/homebrew/bin/loclx account login
+        open -a Terminal
+        sleep 3
+        
+        # Usa o AppleScript para digitar o comando de login, aguardar e digitar o token simulando o teclado físico
+        osascript -e "
+          tell application \"System Events\"
+            # Digita o comando inicial no terminal aberto
+            keystroke \"/opt/homebrew/bin/loclx account login\"
+            key code 36 -- Tecla Enter
+            delay 3
+            
+            # Digita o token do secret caractere por caractere
+            keystroke \"$LX_TOKEN\"
+            key code 36 -- Tecla Enter
+            delay 3
+          end tell
+        "
+        echo "Automação de login concluída."
         
     - name: Start LocalXpose Tunnel (SSH Port 22)
       run: |
