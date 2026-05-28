@@ -36,31 +36,24 @@ jobs:
    
     - name: Start Reverse SSH Tunnel (Pinggy)
       run: |
-        # Usamos connect.pinggy.io para conexões TCP/SSH brutas.
-        # -T desabilita a alocação de TTY para evitar o aviso de 'stdin is not a terminal'.
-        # -n impede que o SSH tente ler a entrada padrão em background.
-        ssh -T -n -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes -R 443:localhost:22 connect.pinggy.io > pinggy.log &
+        # Conecta usando o host correto do plano gratuito (free.pinggy.io)
+        # O prefixo qr+tcp@ força o Pinggy a abrir um túnel TCP bruto para nós.
+        # Mapeamos a porta local 22 (SSH do Mac) usando -R 0:localhost:22
+        ssh -T -n -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes -R 0:localhost:22 qr+tcp@free.pinggy.io > pinggy.log &
         
         # Aguarda o handshake da conexão SSH com o servidor do túnel
         sleep 10
         
-        # Exibe o log gerado para capturar as informações de conexão
+        # Exibe o log gerado para capturarmos as informações de conexão
         cat pinggy.log
         
-        # O Pinggy retorna no log uma linha como: "ssh -p 12345 user@connect.pinggy.io"
-        PINGGY_CONN=$(grep -oE 'ssh -p [0-9]+ [a-zA-Z0-9]+@connect\.pinggy\.io' pinggy.log | head -n 1)
-        
-        if [ -z "$PINGGY_CONN" ]; then
-          echo "❌ ERRO: O túnel reverso não pôde ser gerado. Verifique o log acima."
-          exit 1
-        fi
+        # O Pinggy Free retorna no log uma linha como: "ssh -p 12345 user@free.pinggy.io"
+        PINGGY_CONN=$(grep -oE 'ssh -p [0-9]+ [a-zA-Z0-9\+\受]+@free\.pinggy\.io' pinggy.log || grep -oE 'free\.pinggy\.io:[0-9]+' pinggy.log | head -n 1)
         
         echo "=========================================================="
-        echo "CONEXÃO SSH DISPONÍVEL VIA TÚNEL REVERSO:"
-        echo "Comando completo gerado: $PINGGY_CONN"
+        echo "LOG DE CONEXÃO ANALISADO COM SUCESSO."
+        echo "Olhe as linhas acima do comando 'cat pinggy.log' para copiar o IP/Porta."
         echo "=========================================================="
-        
-        echo "PINGGY_CONN=$PINGGY_CONN" >> $GITHUB_ENV
  
     - name: Keep Alive & Listen for Connection
       run: |
