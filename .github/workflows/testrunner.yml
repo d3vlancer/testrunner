@@ -1,0 +1,79 @@
+name: iOS Remote Debugging Host
+
+on:
+  workflow_dispatch:
+    inputs:
+      ngrok_region:
+        description: 'Região do Ngrok (ex: us, eu, ap, sa)'
+        required: true
+        default: 'us'
+
+jobs:
+  configure-host:
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    # 1. Setup do Xcode selecionando a versão desejada
+    - name: Setup Xcode 26.3
+      uses: maxim-lobanov/setup-xcode@v1 
+      with:
+        xcode-version: '26.3'
+
+# 2. Configurar SSH e definir senha para o usuário 'runner'
+    - name: Configure SSH Server
+      env:
+        RUNNER_PWD: ${{ secrets.MACOS_RUNNER_PASSWORD }}
+      run: |
+        sudo systemsetup -setremotelogin on
+        
+        # Passa a senha via pipeline de forma segura usando a variável de ambiente
+        echo "runner:$RUNNER_PWD" | sudo chpasswd
+        
+        sudo sed -i '' 's/#PasswordAuthentication yes/PasswordAuthentication yes/g' /etc/ssh/sshd_config
+        sudo launchctl kickstart -k system/com.openssh.sshd
+
+    # 3. Setup e Inicialização do Ngrok
+    - name: Setup Ngrok
+      env:
+        NGROK_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
+      run: |
+        brew install ngrok/ngrok/ngrok
+        
+        # Consome o token blindado contra injeção de caracteres
+        ngrok config add-authtoken "$NGROK_TOKEN"
+
+    - name: Start Ngrok Tunnel (SSH Port 22)
+      run: |
+        # Inicia o ngrok em background roteando a porta TCP 22 (SSH)
+        ngrok tcp 22 --region ${{ github.event.inputs.ngrok_region }} --log=stdout > ngrok.log &
+        sleep 5
+        
+        # Extrai a URL gerada pelo Ngrok (ex: tcp://0.tcp.ngrok.io:12345)
+        NGROK_URL=$(curl -s http://localhost:4040/api/tunnels | jq -r '.tunnels[0].public_url')
+        echo "=========================================================="
+        echo "CONEXÃO SSH DISPONÍVEL:"
+        echo "Endereço: $NGROK_URL"
+        echo "Usuário: runner"
+        echo "Senha: [Definida no seu Secret MACOS_RUNNER_PASSWORD]"
+        echo "=========================================================="
+        
+        # Salva a URL num arquivo de log legível no console do workflow
+        echo "NGROK_URL=$NGROK_URL" >> $GITHUB_ENV
+
+    # 4. Trava o Workflow em execução (Keep Alive)
+    - name: Keep Alive & Listen for Connection
+      run: |
+        echo "O Runner está pronto e aguardando conexões do Visual Studio."
+        echo "Para encerrar este runner, cancele o Job no GitHub Actions ou remova o arquivo /tmp/keepalive via SSH."
+        
+        touch /tmp/keepalive
+        
+        # Loop que roda até o arquivo ser deletado ou o limite de 6h do GitHub ser atingido
+        while [ -f /tmp/keepalive ]; do
+          sleep 30
+        done
+        
+        echo "Arquivo keepalive removido. Encerrando o runner."
