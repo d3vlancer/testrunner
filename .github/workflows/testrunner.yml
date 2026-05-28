@@ -34,30 +34,36 @@ jobs:
          
         sudo launchctl kickstart -k system/com.openssh.sshd
    
-    - name: Setup LocalXpose
-      env:
-        LX_TOKEN: ${{ secrets.LOCALXPOSE_TOKEN }}
-      run: | 
-        brew install --cask localxpose
-         
-        open -a Terminal
+    - name: Setup & Start Telebit Tunnel
+      run: |
+        curl -fsSL https://get.telebit.io | bash
+        
+        # Aguarda 3 segundos para o daemon interno subir na memória
         sleep 3
         
-        # Usa o AppleScript para digitar o comando de login, aguardar e digitar o token simulando o teclado físico
-        osascript -e "
-          tell application \"System Events\"
-            # Digita o comando inicial no terminal aberto
-            keystroke \"/opt/homebrew/bin/loclx account login\"
-            key code 36 -- Tecla Enter
-            delay 3
-            
-            # Digita o token do secret caractere por caractere
-            keystroke \"$LX_TOKEN\"
-            key code 36 -- Tecla Enter
-            delay 3
-          end tell
-        "
-        echo "Automação de login concluída."
+        # Adiciona um túnel TCP apontando diretamente para a porta 22 (SSH do Mac)
+        ~/telebit tunnel:add tcp 22
+        
+        # Coleta o status para gerar os logs e capturar a URL pública
+        ~/telebit status > telebit.log
+        cat telebit.log
+        
+        # Extrai o endereço gerado (Exemplo: tcp.telebit.cloud:12345 ou tcp.telebit.io:12345)
+        TELEBIT_URL=$(grep -oE 'tcp\.telebit\.(io|cloud|net):[0-9]+' telebit.log | head -n 1)
+        
+        if [ -z "$TELEBIT_URL" ]; then
+          echo "❌ ERRO: O túnel do Telebit não pôde ser gerado."
+          exit 1
+        fi
+        
+        echo "=========================================================="
+        echo "CONEXÃO SSH DISPONÍVEL (TELEBIT):"
+        echo "Endereço para o Pair to Mac: $TELEBIT_URL"
+        echo "Usuário: runner"
+        echo "Senha: [Definida no seu Secret MACOS_RUNNER_PASSWORD]"
+        echo "=========================================================="
+        
+        echo "TELEBIT_URL=$TELEBIT_URL" >> $GITHUB_ENV
         
     - name: Start LocalXpose Tunnel (SSH Port 22)
       run: |
