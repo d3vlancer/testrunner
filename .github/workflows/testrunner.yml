@@ -36,23 +36,22 @@ jobs:
    
     - name: Start Reverse SSH Tunnel (Pinggy)
       run: |
-        # Executa o SSH nativo do Mac conectando ao servidor do Pinggy
-        # -R 443:localhost:22 diz para mapear uma porta pública deles para a porta 22 (SSH) do Runner.
-        # O oExitOnForwardFailure garante que o script saiba se falhar.
-        ssh -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes -R 443:localhost:22 tcp.pinggy.io > pinggy.log &
+        # Usamos connect.pinggy.io para conexões TCP/SSH brutas.
+        # -T desabilita a alocação de TTY para evitar o aviso de 'stdin is not a terminal'.
+        # -n impede que o SSH tente ler a entrada padrão em background.
+        ssh -T -n -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes -R 443:localhost:22 connect.pinggy.io > pinggy.log &
         
-        # Aguarda o handshake da conexão SSH
-        sleep 8
+        # Aguarda o handshake da conexão SSH com o servidor do túnel
+        sleep 10
         
-        # Printa o log inteiro no console para inspeção visual do desenvolvedor
+        # Exibe o log gerado para capturar as informações de conexão
         cat pinggy.log
         
-        # Filtra a URL e a Porta gerada pelo Pinggy
-        # O Pinggy retorna algo como: "ssh -p 12345 user@ran.pinggy.io"
-        PINGGY_CONN=$(grep -oE 'ssh -p [0-9]+ [a-zA-Z0-9]+@ran\.pinggy\.io' pinggy.log | head -n 1)
+        # O Pinggy retorna no log uma linha como: "ssh -p 12345 user@connect.pinggy.io"
+        PINGGY_CONN=$(grep -oE 'ssh -p [0-9]+ [a-zA-Z0-9]+@connect\.pinggy\.io' pinggy.log | head -n 1)
         
         if [ -z "$PINGGY_CONN" ]; then
-          echo "❌ ERRO: O túnel reverso não pôde ser gerado."
+          echo "❌ ERRO: O túnel reverso não pôde ser gerado. Verifique o log acima."
           exit 1
         fi
         
@@ -61,7 +60,6 @@ jobs:
         echo "Comando completo gerado: $PINGGY_CONN"
         echo "=========================================================="
         
-        # Salva o comando no ambiente
         echo "PINGGY_CONN=$PINGGY_CONN" >> $GITHUB_ENV
  
     - name: Keep Alive & Listen for Connection
