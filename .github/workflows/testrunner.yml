@@ -6,7 +6,7 @@ on:
       ngrok_region:
         description: 'Região do Ngrok (ex: us, eu, ap, sa)'
         required: true
-        default: 'us'
+        default: 'sa'
 
 jobs:
   configure-host:
