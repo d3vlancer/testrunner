@@ -15,27 +15,28 @@ jobs:
     steps:
     - name: Checkout Repository
       uses: actions/checkout@v4
-
-    # 1. Setup do Xcode selecionando a versão desejada
+ 
     - name: Setup Xcode 26.3
       uses: maxim-lobanov/setup-xcode@v1 
       with:
         xcode-version: '26.3'
-
-# 2. Configurar SSH e definir senha para o usuário 'runner'
+ 
     - name: Configure SSH Server
       env:
         RUNNER_PWD: ${{ secrets.MACOS_RUNNER_PASSWORD }}
       run: |
+        # Ativa o Login Remoto (SSH) no macOS
         sudo systemsetup -setremotelogin on
         
-        # Passa a senha via pipeline de forma segura usando a variável de ambiente
-        echo "runner:$RUNNER_PWD" | sudo chpasswd
+        # Altera a senha do usuário 'runner' usando o comando nativo do macOS (sysadminctl)
+        sudo sysadminctl -password "$RUNNER_PWD" -user runner
         
+        # Garante que o SSH aceita autenticação por senha
         sudo sed -i '' 's/#PasswordAuthentication yes/PasswordAuthentication yes/g' /etc/ssh/sshd_config
+        
+        # Reinicia o serviço de SSH no macOS para aplicar as alterações
         sudo launchctl kickstart -k system/com.openssh.sshd
-
-    # 3. Setup e Inicialização do Ngrok
+ 
     - name: Setup Ngrok
       env:
         NGROK_TOKEN: ${{ secrets.NGROK_AUTH_TOKEN }}
@@ -62,8 +63,7 @@ jobs:
         
         # Salva a URL num arquivo de log legível no console do workflow
         echo "NGROK_URL=$NGROK_URL" >> $GITHUB_ENV
-
-    # 4. Trava o Workflow em execução (Keep Alive)
+ 
     - name: Keep Alive & Listen for Connection
       run: |
         echo "O Runner está pronto e aguardando conexões do Visual Studio."
