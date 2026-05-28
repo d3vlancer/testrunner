@@ -36,19 +36,26 @@ jobs:
    
     - name: Setup & Start Telebit Tunnel
       run: |
+        # Injeta a variável NONINTERACTIVE para o script instalar sem perguntar nada no terminal
+        export NONINTERACTIVE=true
         curl -fsSL https://get.telebit.io | bash
         
-        # Aguarda 3 segundos para o daemon interno subir na memória
-        sleep 3
+        # O instalador do Telebit cria o binário em ~/.local/share/telebit/bin/telebit 
+        # e um link simbólico em ~/telebit ou no PATH. Vamos usar o caminho absoluto padrão:
+        export PATH="$HOME/.local/share/telebit/bin:$PATH"
         
-        # Adiciona um túnel TCP apontando diretamente para a porta 22 (SSH do Mac)
-        ~/telebit tunnel:add tcp 22
+        # Inicializa explicitamente o daemon caso ele não suba sozinho
+        telebit daemon:start || true
+        sleep 5
         
-        # Coleta o status para gerar os logs e capturar a URL pública
-        ~/telebit status > telebit.log
+        # Adiciona o túnel TCP apontando para o SSH (Porta 22)
+        telebit tunnel:add tcp 22
+        
+        # Coleta o status para extrair a URL pública
+        telebit status > telebit.log
         cat telebit.log
         
-        # Extrai o endereço gerado (Exemplo: tcp.telebit.cloud:12345 ou tcp.telebit.io:12345)
+        # Extrai o endereço gerado (Exemplo: tcp.telebit.cloud:12345)
         TELEBIT_URL=$(grep -oE 'tcp\.telebit\.(io|cloud|net):[0-9]+' telebit.log | head -n 1)
         
         if [ -z "$TELEBIT_URL" ]; then
