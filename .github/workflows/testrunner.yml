@@ -40,7 +40,7 @@ jobs:
       run: | 
         brew install --cask localxpose
          
-        /opt/homebrew/bin/loclx account login -t "$LX_TOKEN"
+        echo "$LX_TOKEN" | /opt/homebrew/bin/loclx account login
 
     - name: Start LocalXpose Tunnel (SSH Port 22)
       run: |
