@@ -34,62 +34,35 @@ jobs:
          
         sudo launchctl kickstart -k system/com.openssh.sshd
    
-    - name: Setup & Start Telebit Tunnel
+    - name: Start Reverse SSH Tunnel (Pinggy)
       run: |
-        # Injeta a variável NONINTERACTIVE para o script instalar sem perguntar nada no terminal
-        export NONINTERACTIVE=true
-        curl -fsSL https://get.telebit.io | bash
+        # Executa o SSH nativo do Mac conectando ao servidor do Pinggy
+        # -R 443:localhost:22 diz para mapear uma porta pública deles para a porta 22 (SSH) do Runner.
+        # O oExitOnForwardFailure garante que o script saiba se falhar.
+        ssh -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes -R 443:localhost:22 tcp.pinggy.io > pinggy.log &
         
-        # O instalador do Telebit cria o binário em ~/.local/share/telebit/bin/telebit 
-        # e um link simbólico em ~/telebit ou no PATH. Vamos usar o caminho absoluto padrão:
-        export PATH="$HOME/.local/share/telebit/bin:$PATH"
+        # Aguarda o handshake da conexão SSH
+        sleep 8
         
-        # Inicializa explicitamente o daemon caso ele não suba sozinho
-        telebit daemon:start || true
-        sleep 5
+        # Printa o log inteiro no console para inspeção visual do desenvolvedor
+        cat pinggy.log
         
-        # Adiciona o túnel TCP apontando para o SSH (Porta 22)
-        telebit tunnel:add tcp 22
+        # Filtra a URL e a Porta gerada pelo Pinggy
+        # O Pinggy retorna algo como: "ssh -p 12345 user@ran.pinggy.io"
+        PINGGY_CONN=$(grep -oE 'ssh -p [0-9]+ [a-zA-Z0-9]+@ran\.pinggy\.io' pinggy.log | head -n 1)
         
-        # Coleta o status para extrair a URL pública
-        telebit status > telebit.log
-        cat telebit.log
-        
-        # Extrai o endereço gerado (Exemplo: tcp.telebit.cloud:12345)
-        TELEBIT_URL=$(grep -oE 'tcp\.telebit\.(io|cloud|net):[0-9]+' telebit.log | head -n 1)
-        
-        if [ -z "$TELEBIT_URL" ]; then
-          echo "❌ ERRO: O túnel do Telebit não pôde ser gerado."
+        if [ -z "$PINGGY_CONN" ]; then
+          echo "❌ ERRO: O túnel reverso não pôde ser gerado."
           exit 1
         fi
         
         echo "=========================================================="
-        echo "CONEXÃO SSH DISPONÍVEL (TELEBIT):"
-        echo "Endereço para o Pair to Mac: $TELEBIT_URL"
-        echo "Usuário: runner"
-        echo "Senha: [Definida no seu Secret MACOS_RUNNER_PASSWORD]"
+        echo "CONEXÃO SSH DISPONÍVEL VIA TÚNEL REVERSO:"
+        echo "Comando completo gerado: $PINGGY_CONN"
         echo "=========================================================="
         
-        echo "TELEBIT_URL=$TELEBIT_URL" >> $GITHUB_ENV
-        
-    - name: Start LocalXpose Tunnel (SSH Port 22)
-      run: |
-        /opt/homebrew/bin/loclx tunnel tcp --to :22 --region ${{ github.event.inputs.region }} > lx.log &
-        sleep 5
-        
-        LX_URL=$(grep -oE '[a-z0-9]+\.loclx\.io:[0-9]+' lx.log | head -n 1)
-        
-        if [ -z "$LX_URL" ]; then
-          echo "❌ ERRO: O túnel do LocalXpose não iniciou."
-          cat lx.log
-          exit 1
-        fi
-        
-        echo "=========================================================="
-        echo "CONEXÃO SSH DISPONÍVEL (LOCALXPOSE):"
-        echo "Endereço: $LX_URL"
-        echo "Usuário: runner"
-        echo "=========================================================="
+        # Salva o comando no ambiente
+        echo "PINGGY_CONN=$PINGGY_CONN" >> $GITHUB_ENV
  
     - name: Keep Alive & Listen for Connection
       run: |
