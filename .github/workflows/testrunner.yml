@@ -20,14 +20,26 @@ jobs:
       env:
         RUNNER_PWD: ${{ secrets.MACOS_RUNNER_PASSWORD }}
       run: |
-        # Ativa o Login Remoto (SSH) no macOS
-        sudo systemsetup -setremotelogin on
-         
+        # 1. Altera a senha do usuário runner no sistema
         sudo sysadminctl -password "$RUNNER_PWD" -user runner
-         
+        
+        # 2. Backup do arquivo de configuração do SSH
+        sudo cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak
+        
+        # 3. Força as diretivas de autenticação por senha no arquivo
         sudo sed -i '' 's/#PasswordAuthentication yes/PasswordAuthentication yes/g' /etc/ssh/sshd_config
-         
-        sudo launchctl kickstart -k system/com.openssh.sshd
+        sudo sed -i '' 's/PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config
+        sudo sed -i '' 's/#ChallengeResponseAuthentication yes/ChallengeResponseAuthentication yes/g' /etc/ssh/sshd_config
+        sudo sed -i '' 's/ChallengeResponseAuthentication no/ChallengeResponseAuthentication yes/g' /etc/ssh/sshd_config
+        
+        # 4. Adiciona uma regra explícita permitindo o usuário runner logar por senha
+        echo -e "\nMatch User runner\n    PasswordAuthentication yes\n    PermitTTY yes" | sudo tee -a /etc/ssh/sshd_config
+        
+        # 5. Reinicia o daemon do SSH aplicando as diretivas no nível do sistema
+        sudo launchctl unload /System/Library/LaunchDaemons/ssh.plist
+        sudo launchctl load -w /System/Library/LaunchDaemons/ssh.plist
+        
+        echo "✅ Servidor SSH reconfigurado com sucesso para aceitar senhas."
    
     - name: Start Reverse SSH Tunnel (Pinggy)
       run: |
