@@ -46,7 +46,7 @@ jobs:
 
     - name: Start Reverse SSH Tunnel (Pinggy)
       run: |
-        ssh -T -n -p 443 -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes -R 0:localhost:22 qr+tcp@free.pinggy.io > pinggy.log &
+        ssh -T -n -p 443 -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -R 0:localhost:22 qr+tcp@free.pinggy.io > pinggy.log &
         sleep 10
         cat pinggy.log
         
