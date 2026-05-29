@@ -49,7 +49,12 @@ jobs:
         ssh -T -n -p 443 -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -R 0:localhost:22 qr+tcp@free.pinggy.io > pinggy.log &
         sleep 10
         cat pinggy.log
-
+        PINGGY_INFO=$(grep -oE "[a-zA-Z0-9.-]+\.pinggy-free\.link:[0-9]+" pinggy.log || grep -oE "free\.pinggy\.io:[0-9]+" pinggy.log)
+        
+        URL=$(echo $PINGGY_INFO | cut -d':' -f1)
+        PORTA=$(echo $PINGGY_INFO | cut -d':' -f2)
+        echo "ssh -L 5900:127.0.0.1:5900 -p $PORTA runner@$URL"
+      
     - name: Prepare macOS Graphical Session & Resolution
       run: |
         echo "🎬 Despertando o ambiente gráfico do macOS..."
