@@ -65,30 +65,26 @@ jobs:
       run: |
         echo "🎬 Setting persistence and login locks..."
         
-        # 1. Configura o autologin para o usuário runner
         sudo defaults write /Library/Preferences/com.apple.loginwindow autoLoginUser "runner"
         
-        # 2. Desativa totalmente a tela de proteção (ScreenSaver) e bloqueios que geram tela cinza
+        # 2. Desativa totalmente a tela de proteção (ScreenSaver)
         sudo defaults write /Library/Preferences/com.apple.screensaver idleTime 0
         sudo defaults write com.apple.screensaver loginWindowIdleTime 0
         
-        # 3. Impede que o Mac entre em repouso
-        sudo pmset -a displaysleep 0 disksleep 0 sleep 0 iopsleep 0 2>/dev/null || true
+        # 3. Aloca o Framebuffer tirando o print inicial
+        sudo screencapture /tmp/current_screen.png || true
         
-        # 4. Aloca o Framebuffer tirando o print inicial
-        sudo screencapture /tmp/current_screen.png 2>/dev/null || true
+        # 4. Destrava a tela cinza reiniciando o agente de login
+        # Rodamos em background com o '|| true' isolado para o bash não travar o step
+        sudo killall loginwindow || true
         
-        # 5. Força o encerramento do processo de login travado.
-        # Ao matar o loginwindow em background, o macOS é obrigado a recarregar a UI direto no Desktop do autologin.
-        sudo killall loginwindow 2>/dev/null || true
-        
-        # 6. Aguarda o Finder se reestruturar após o reset do login
+        # 5. Aguarda o Finder e o subsistema gráfico se reestruturarem
         sleep 5
         
-        # 7. Registra os agentes gráficos básicos para o ID do usuário ativo
+        # 6. Registra os agentes gráficos para o usuário runner
         RUNNER_UID=$(id -u runner)
-        sudo launchctl bootstrap gui/$RUNNER_UID /System/Library/LaunchAgents/com.apple.Finder.plist 2>/dev/null || true
-        
+        sudo launchctl bootstrap gui/$RUNNER_UID /System/Library/LaunchAgents/com.apple.Finder.plist || true
+
         echo "✅ UI successfully unlocked!"
         
     - name: Keep Alive & Monitor Tunnel
