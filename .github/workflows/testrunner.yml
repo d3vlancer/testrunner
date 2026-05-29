@@ -65,23 +65,21 @@ jobs:
       run: |
         echo "🎬 Setting persistence and login locks..."
         
-        # 1. Configura o autologin para o usuário runner
         sudo defaults write /Library/Preferences/com.apple.loginwindow autoLoginUser "runner"
         
-        # 2. Desativa as travas de proteção de tela que congelam os pixels
+        # 2. Desativa travas de proteção de tela
         sudo defaults write /Library/Preferences/com.apple.screensaver idleTime 0
         sudo defaults write com.apple.screensaver loginWindowIdleTime 0
         
-        # 3. Força a criação do Framebuffer disparando um print virtual
+        # 3. Força a criação do Framebuffer disparando o print virtual
         sudo screencapture /tmp/current_screen.png || true
         
-        # 4. Em vez de matar o loginwindow, acordamos o WindowServer enviando um sinal de refresh
-        # Isso força o redesenho da tela sem derrubar o processo do GitHub Actions
-        sudo killall -HUP WindowServer 2>/dev/null || true
-        
-        # 5. Garante que o Finder e os menus visuais subam na sessão gráfica ativa
-        RUNNER_UID=$(id -u runner)
-        sudo launchctl bootstrap gui/$RUNNER_UID /System/Library/LaunchAgents/com.apple.Finder.plist || true
+        # 4. O NOVO TRUQUE: Simula um "Wake Up" enviando comandos de teclado via AppleScript.
+        # Isso simula o comportamento de um usuário pressionando chaves no teclado físico,
+        # o que força o macOS a desenhar a interface na tela virtual sem derrubar o agente.
+        sudo osascript -e 'tell application "System Events" to key code 123' || true # Seta para a esquerda
+        sleep 1
+        sudo osascript -e 'tell application "System Events" to key code 53' || true  # Tecla ESC
 
         echo "✅ UI successfully unlocked!"
         
