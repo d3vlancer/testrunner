@@ -19,6 +19,7 @@ jobs:
     - name: Configure SSH Server with Public Key
       env:
         SSH_PUB_KEY: ${{ secrets.MACOS_SSH_PUB_KEY }}
+        VNC_PASS: ${{ secrets.VNC_PWD }}
       run: |
         # Cria o diretório .ssh para o usuário 'runner'
         mkdir -p ~/.ssh
@@ -37,29 +38,26 @@ jobs:
         sudo launchctl load -w /System/Library/LaunchDaemons/ssh.plist
         
         echo "✅ Chave pública injetada e autorizada com sucesso!"
-   
+           
+        sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -activate -configure -access -on -restart -agent -privs -all
+        sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -configure -clientopts -setvnclegacy -vnclegacy yes -setvncpw -vncpw "$VNC_PASS"
+        sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -restart -agent
+        echo "✅ VNC Configurado com sucesso!"
+
     - name: Start Reverse SSH Tunnel (Pinggy)
       run: |
-        # Adicionado o '-p 443' para o cliente SSH do Mac conectar na porta correta do Pinggy
         ssh -T -n -p 443 -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes -R 0:localhost:22 qr+tcp@free.pinggy.io > pinggy.log &
-        
-        # Aguarda 10 segundos para o handshake e a geração dos links
         sleep 10
-        
-        # Exibe o arquivo de log no console do GitHub Actions
         cat pinggy.log
         
-        echo "=========================================================="
-        echo "LOG DE CONEXÃO EXIBIDO ACIMA."
-        echo "Abra o log desse step, procure pela linha 'Your tunnel is live at' "
-        echo "e copie o endereço 'free.pinggy.io:PORTA' para usar no Visual Studio."
-        echo "=========================================================="
- 
-    - name: Keep Alive & Listen for Connection
+    - name: Keep Alive & Monitor Tunnel
       run: |
-        echo "waiting for connections..."
-        touch /tmp/keepalive
-        while [ -f /tmp/keepalive ]; do
-          sleep 30
-        done 
-        echo "Exiting."
+        echo "⏳ Monitorando o túnel do Pinggy... O job encerrará automaticamente se o túnel cair."
+        
+        # Loop que roda enquanto o processo do SSH do Pinggy (qr+tcp) estiver em execução
+        while pgrep -f "qr\+tcp@free.pinggy.io" > /dev/null; do
+          sleep 15
+        done
+        
+        echo "🛑 O túnel do Pinggy foi encerrado (ou atingiu o limite de 1 hora)."
+        echo "Encerrando o workflow com sucesso."
