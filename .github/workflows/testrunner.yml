@@ -65,23 +65,21 @@ jobs:
       run: |
         echo "🎬 Setting persistence and login locks..."
         
+        # 1. Configura o autologin para o usuário runner
         sudo defaults write /Library/Preferences/com.apple.loginwindow autoLoginUser "runner"
         
-        # 2. Desativa totalmente a tela de proteção (ScreenSaver)
+        # 2. Desativa as travas de proteção de tela que congelam os pixels
         sudo defaults write /Library/Preferences/com.apple.screensaver idleTime 0
         sudo defaults write com.apple.screensaver loginWindowIdleTime 0
         
-        # 3. Aloca o Framebuffer tirando o print inicial
+        # 3. Força a criação do Framebuffer disparando um print virtual
         sudo screencapture /tmp/current_screen.png || true
         
-        # 4. Destrava a tela cinza reiniciando o agente de login
-        # Rodamos em background com o '|| true' isolado para o bash não travar o step
-        sudo killall loginwindow || true
+        # 4. Em vez de matar o loginwindow, acordamos o WindowServer enviando um sinal de refresh
+        # Isso força o redesenho da tela sem derrubar o processo do GitHub Actions
+        sudo killall -HUP WindowServer 2>/dev/null || true
         
-        # 5. Aguarda o Finder e o subsistema gráfico se reestruturarem
-        sleep 5
-        
-        # 6. Registra os agentes gráficos para o usuário runner
+        # 5. Garante que o Finder e os menus visuais subam na sessão gráfica ativa
         RUNNER_UID=$(id -u runner)
         sudo launchctl bootstrap gui/$RUNNER_UID /System/Library/LaunchAgents/com.apple.Finder.plist || true
 
