@@ -16,30 +16,27 @@ jobs:
       with:
         xcode-version: '26.3'
  
-    - name: Configure SSH Server
+    - name: Configure SSH Server with Public Key
       env:
-        RUNNER_PWD: ${{ secrets.MACOS_RUNNER_PASSWORD }}
+        SSH_PUB_KEY: ${{ secrets.MACOS_SSH_PUB_KEY }}
       run: |
-        # 1. Altera a senha do usuário runner no sistema
-        sudo sysadminctl -password "$RUNNER_PWD" -user runner
+        # Cria o diretório .ssh para o usuário 'runner'
+        mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
         
-        # 2. Backup do arquivo de configuração do SSH
+        # Injeta a sua chave pública do Windows no arquivo de chaves autorizadas do Mac
+        echo "$SSH_PUB_KEY" >> ~/.ssh/authorized_keys
+        chmod 600 ~/.ssh/authorized_keys
+        
+        # Backup e Ajuste estrito do SSH do macOS para aceitar apenas chaves públicas
         sudo cp /etc/ssh/sshd_config /etc/ssh/sshd_config.bak
+        sudo sed -i '' 's/#PubkeyAuthentication yes/PubkeyAuthentication yes/g' /etc/ssh/sshd_config
         
-        # 3. Força as diretivas de autenticação por senha no arquivo
-        sudo sed -i '' 's/#PasswordAuthentication yes/PasswordAuthentication yes/g' /etc/ssh/sshd_config
-        sudo sed -i '' 's/PasswordAuthentication no/PasswordAuthentication yes/g' /etc/ssh/sshd_config
-        sudo sed -i '' 's/#ChallengeResponseAuthentication yes/ChallengeResponseAuthentication yes/g' /etc/ssh/sshd_config
-        sudo sed -i '' 's/ChallengeResponseAuthentication no/ChallengeResponseAuthentication yes/g' /etc/ssh/sshd_config
-        
-        # 4. Adiciona uma regra explícita permitindo o usuário runner logar por senha
-        echo -e "\nMatch User runner\n    PasswordAuthentication yes\n    PermitTTY yes" | sudo tee -a /etc/ssh/sshd_config
-        
-        # 5. Reinicia o daemon do SSH aplicando as diretivas no nível do sistema
+        # Reinicia o serviço de SSH do macOS para aplicar as regras
         sudo launchctl unload /System/Library/LaunchDaemons/ssh.plist
         sudo launchctl load -w /System/Library/LaunchDaemons/ssh.plist
         
-        echo "✅ Servidor SSH reconfigurado com sucesso para aceitar senhas."
+        echo "✅ Chave pública injetada e autorizada com sucesso!"
    
     - name: Start Reverse SSH Tunnel (Pinggy)
       run: |
