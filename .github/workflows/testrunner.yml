@@ -37,27 +37,50 @@ jobs:
         sudo launchctl unload /System/Library/LaunchDaemons/ssh.plist
         sudo launchctl load -w /System/Library/LaunchDaemons/ssh.plist
         
-        echo "✅ Chave pública injetada e autorizada com sucesso!"
+        echo "✅ Public key successfully injected and authorized!"
            
         sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -activate -configure -access -on -restart -agent -privs -all
         sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -configure -clientopts -setvnclegacy -vnclegacy yes -setvncpw -vncpw "$VNC_PASS"
         sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart -restart -agent
-        echo "✅ VNC Configurado com sucesso!"
+        echo "✅ VNC setup complete!"
 
     - name: Start Reverse SSH Tunnel (Pinggy)
       run: |
         ssh -T -n -p 443 -o StrictHostKeyChecking=no -o ExitOnForwardFailure=yes -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -R 0:localhost:22 qr+tcp@free.pinggy.io > pinggy.log &
         sleep 10
         cat pinggy.log
+
+    - name: Prepare macOS Graphical Session & Resolution
+      run: |
+        echo "🎬 Despertando o ambiente gráfico do macOS..."
         
+        # 1. Configura o autologin para o usuário runner (evita tela de bloqueio travada)
+        echo "Avoiding lock screen"
+        sudo defaults write /Library/Preferences/com.apple.loginwindow autoLoginUser "runner"
+        
+        # 2. Força o Finder e o subsistema GUI a inicializarem para o ID do usuário runner
+        echo "Finder and UI subsystem initalization for current user"
+        RUNNER_UID=$(id -u runner)
+        sudo launchctl kickstart -k gui/$RUNNER_UID/com.apple.finder 2>/dev/null || true
+        
+        # 3. Define uma resolução virtual estável via AppleScript (Simula um monitor ativo)
+        echo "setting an stable UI resolution"
+        sudo osascript -e 'tell application "Finder" to set desktop picture to POSIX file "/System/Library/Desktop Pictures/Solid Colors/Stone Gray.png"' 2>/dev/null || true
+        
+        # 4. Cria um dump de segurança para garantir que o subsistema gráfico não entre em repouso (Sleep)
+        echo "safety dump for UI subsystem doesn't sleep"
+        sudo pmset -a displaysleep 0 disksleep 0 sleep 0 iopsleep 0 2>/dev/null || true
+        
+        echo "✅ UI wake and ready for transmission!"
+
     - name: Keep Alive & Monitor Tunnel
       run: |
-        echo "⏳ Monitorando o túnel do Pinggy... O job encerrará automaticamente se o túnel cair."
+        echo "⏳ Monitoring Pinggy tunnel... this job finishes if it is expired or closed."
         
         # Loop que roda enquanto o processo do SSH do Pinggy (qr+tcp) estiver em execução
         while pgrep -f "qr\+tcp@free.pinggy.io" > /dev/null; do
           sleep 15
         done
         
-        echo "🛑 O túnel do Pinggy foi encerrado (ou atingiu o limite de 1 hora)."
+        echo "🛑 Pinggy tunnel was closed or expired."
         echo "Encerrando o workflow com sucesso."
