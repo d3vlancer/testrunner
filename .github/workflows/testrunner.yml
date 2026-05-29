@@ -63,25 +63,33 @@ jobs:
       
     - name: Prepare macOS Graphical Session & Resolution
       run: |
-        echo "🎬 Creating video Framebuffer..."
+        echo "🎬 Setting persistence and login locks..."
         
         # 1. Configura o autologin para o usuário runner
         sudo defaults write /Library/Preferences/com.apple.loginwindow autoLoginUser "runner"
         
-        # 2. Desativa o repouso do sistema e do display por completo
+        # 2. Desativa totalmente a tela de proteção (ScreenSaver) e bloqueios que geram tela cinza
+        sudo defaults write /Library/Preferences/com.apple.screensaver idleTime 0
+        sudo defaults write com.apple.screensaver loginWindowIdleTime 0
+        
+        # 3. Impede que o Mac entre em repouso
         sudo pmset -a displaysleep 0 disksleep 0 sleep 0 iopsleep 0 2>/dev/null || true
         
-        # 3. força o macOS a disparar o subsistema gráfico
-        # Tirar um screencapture via sudo força o WindowServer a inicializar o display virtual padrão (1280x1024)
+        # 4. Aloca o Framebuffer tirando o print inicial
         sudo screencapture /tmp/current_screen.png 2>/dev/null || true
         
-        # 4. Ativa o bootstrap do Finder na sessão do usuário atual para desenhar a mesa (Desktop)
+        # 5. Força o encerramento do processo de login travado.
+        # Ao matar o loginwindow em background, o macOS é obrigado a recarregar a UI direto no Desktop do autologin.
+        sudo killall loginwindow 2>/dev/null || true
+        
+        # 6. Aguarda o Finder se reestruturar após o reset do login
+        sleep 5
+        
+        # 7. Registra os agentes gráficos básicos para o ID do usuário ativo
         RUNNER_UID=$(id -u runner)
         sudo launchctl bootstrap gui/$RUNNER_UID /System/Library/LaunchAgents/com.apple.Finder.plist 2>/dev/null || true
         
-        # 5. Dá um pequeno delay para o sistema de vídeo estabilizar antes do túnel abrir
-        sleep 5
-        echo "✅ Virtual Screen initalized with allocated Framebuffer!"
+        echo "✅ UI successfully unlocked!"
         
     - name: Keep Alive & Monitor Tunnel
       run: |
