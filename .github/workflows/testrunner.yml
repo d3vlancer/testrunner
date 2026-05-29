@@ -15,6 +15,12 @@ jobs:
       uses: maxim-lobanov/setup-xcode@v1 
       with:
         xcode-version: '26.3'
+
+    - uses: actions/checkout@v6
+    - uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: '10.0.x'
+    - run: dotnet workload install maui
  
     - name: Configure SSH Server with Public Key
       env:
@@ -57,27 +63,26 @@ jobs:
       
     - name: Prepare macOS Graphical Session & Resolution
       run: |
-        echo "🎬 Despertando o ambiente gráfico do macOS..."
+        echo "🎬 Creating video Framebuffer..."
         
-        # 1. Configura o autologin para o usuário runner (evita tela de bloqueio travada)
-        echo "Avoiding lock screen"
+        # 1. Configura o autologin para o usuário runner
         sudo defaults write /Library/Preferences/com.apple.loginwindow autoLoginUser "runner"
         
-        # 2. Força o Finder e o subsistema GUI a inicializarem para o ID do usuário runner
-        echo "Finder and UI subsystem initalization for current user"
-        RUNNER_UID=$(id -u runner)
-        sudo launchctl kickstart -k gui/$RUNNER_UID/com.apple.finder 2>/dev/null || true
-        
-        # 3. Define uma resolução virtual estável via AppleScript (Simula um monitor ativo)
-        echo "setting an stable UI resolution"
-        sudo osascript -e 'tell application "Finder" to set desktop picture to POSIX file "/System/Library/Desktop Pictures/Solid Colors/Stone Gray.png"' 2>/dev/null || true
-        
-        # 4. Cria um dump de segurança para garantir que o subsistema gráfico não entre em repouso (Sleep)
-        echo "safety dump for UI subsystem doesn't sleep"
+        # 2. Desativa o repouso do sistema e do display por completo
         sudo pmset -a displaysleep 0 disksleep 0 sleep 0 iopsleep 0 2>/dev/null || true
         
-        echo "✅ UI wake and ready for transmission!"
-
+        # 3. força o macOS a disparar o subsistema gráfico
+        # Tirar um screencapture via sudo força o WindowServer a inicializar o display virtual padrão (1280x1024)
+        sudo screencapture /tmp/current_screen.png 2>/dev/null || true
+        
+        # 4. Ativa o bootstrap do Finder na sessão do usuário atual para desenhar a mesa (Desktop)
+        RUNNER_UID=$(id -u runner)
+        sudo launchctl bootstrap gui/$RUNNER_UID /System/Library/LaunchAgents/com.apple.Finder.plist 2>/dev/null || true
+        
+        # 5. Dá um pequeno delay para o sistema de vídeo estabilizar antes do túnel abrir
+        sleep 5
+        echo "✅ Virtual Screen initalized with allocated Framebuffer!"
+        
     - name: Keep Alive & Monitor Tunnel
       run: |
         echo "⏳ Monitoring Pinggy tunnel... this job finishes if it is expired or closed."
